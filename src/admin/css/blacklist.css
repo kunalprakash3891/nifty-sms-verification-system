@@ -1,0 +1,15 @@
+.quick-edit-form {
+
+}
+
+.quick-edit-form label,
+.quick-edit-form input,
+.quick-edit-form textarea {
+    display: block;
+}
+.quick-edit-form .action-btns {
+    margin-top: 1em;
+}
+.quick-edit-form .action-btns button {
+    margin-right: 1em;
+}
