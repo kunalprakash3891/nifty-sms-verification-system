@@ -12,6 +12,7 @@
 namespace Nifty_SMS_Verification_System\Handlers;
 
 use Nifty_SMS_Verification_System\Models\Pending_Verification;
+use Nifty_SMS_Verification_System\Models\SMS_Delayed_Number;
 use Nifty_SMS_Verification_System\Models\SMS_Log;
 
 // Exit if accessed directly.
@@ -37,10 +38,13 @@ class Verification_Cleaner {
 		global $wpdb;
 		$current_time_gmt = current_time( 'mysql', true );
 		// all pending verification older than 6 hour.
-		$wpdb->query( $wpdb->prepare( "DELETE FROM $table WHERE requested_at < DATE_SUB( %s - INTERVAL 1 DAY", $current_time_gmt  ) );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $table WHERE requested_at < DATE_SUB( %s, INTERVAL 1 DAY )", $current_time_gmt ) );
 
 		// sms log table.
 		$log_table = SMS_Log::table();
-		$wpdb->query( $wpdb->prepare( "DELETE FROM $log_table WHERE requested_at < DATE_SUB( %s - INTERVAL 1 DAY", $current_time_gmt  ) );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $log_table WHERE requested_at < DATE_SUB( %s, INTERVAL 1 DAY )", $current_time_gmt ) );// sms log table.
+		// delayed table cleaning.
+		$delayed_table = SMS_Delayed_Number::table();
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $delayed_table WHERE created_at < DATE_SUB( %s, INTERVAL 1 DAY )", $current_time_gmt ) );
 	}
 }

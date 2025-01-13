@@ -131,15 +131,19 @@ class Verification_Request_REST_Controller extends WP_REST_Controller {
 
 			$count = absint( $count );
 			if ( $count >= $attempts ) {
+				// check if current time is greater than last request time + delay, allow if so
+				$current_time_stamp      = strtotime( current_time( 'mysql', true ) );
+				$last_request_timestamp = strtotime( $request->requested_at );
+				$delay                   = absint( $rate_limit['delay'] ) * 60;// convert mins to sec.
 				// add to delayed list.
-				$delayed = SMS_Delayed_Number::create( array(
-					'phone_number' => $phone_number,
-					'created_at'   => $request->requested_at,
-				) );
-
-				$delayed->save();
-
-				return new WP_Error( 'niftysvs_rate_limit_exceeded', __( 'Sorry, you have requested too many SMS codes. Please try again later.', 'nifty-sms-verification-system' ), array( 'status' => 429 ) );
+				if ( $current_time_stamp < ( $last_request_timestamp + $delay ) ) {
+					$delayed = SMS_Delayed_Number::create( array(
+						'phone_number' => $phone_number,
+						'created_at'   => $request->requested_at,
+					) );
+					$delayed->save();
+					return new WP_Error( 'niftysvs_rate_limit_exceeded', __( 'Sorry, you have requested too many SMS codes. Please try again later.', 'nifty-sms-verification-system' ), array( 'status' => 429 ) );
+				}
 			}
 		}
 
@@ -168,7 +172,6 @@ class Verification_Request_REST_Controller extends WP_REST_Controller {
 					'device_id'     => $device_id,
 					'phone_number'  => $phone_number,
 					'requested_at'  => current_time( 'mysql', true ),
-					'request_count' => 1,
 				)
 			);
 		}

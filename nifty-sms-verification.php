@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:  Nifty SMS Verification System
- * Version:      1.0.5
+ * Version:      1.0.8
  * Description:  It allows verification of user mobile numbers using twilio api.
  * Author:       BuddyDev
  * Author URI:   https://buddydev.com/
@@ -16,6 +16,7 @@
 
 use Nifty_SMS_Verification_System\Bootstrap\Autoloader;
 use Nifty_SMS_Verification_System\Bootstrap\Bootstrapper;
+use Nifty_SMS_Verification_System\Bootstrap\Installer;
 use Nifty_SMS_Verification_System\Schema\Schema;
 
 // Do not allow direct access over web.
@@ -36,7 +37,7 @@ class Nifty_SMS_Verification_System {
 	 *
 	 * @var string
 	 */
-	private string $version = '1.0.5';
+	private string $version = '1.0.8';
 
 	/**
 	 * Singleton instance
@@ -111,12 +112,12 @@ class Nifty_SMS_Verification_System {
 
 		spl_autoload_register( $autoloader );
 
-		register_activation_hook( __FILE__, array( $this, 'on_activation' ) );
-		register_deactivation_hook( __FILE__, array( $this, 'on_deactivation' ) );
+		//register_activation_hook( __FILE__, array( $this, 'on_activation' ) );
+		//register_deactivation_hook( __FILE__, array( $this, 'on_deactivation' ) );
 
 		// Drop tables on uninstall.
 		// register_uninstall_hook( __FILE__, array( 'Schema', 'drop' ) );.
-
+		( new Installer() )->setup( __FILE__ );
 		Bootstrapper::boot();
 	}
 

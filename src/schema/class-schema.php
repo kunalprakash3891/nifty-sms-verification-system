@@ -74,7 +74,6 @@ class Schema {
 			  `id` bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			  `device_id` varchar(64) NOT NULL,
 			  `phone_number` varchar(20) NOT NULL,
-			  `request_count` int NOT NULL,
 			  `is_verified` tinyint(1) NOT NULL DEFAULT '0',
 			  `requested_at` datetime NOT NULL,
 			  UNIQUE KEY `device_id` (`device_id`)
