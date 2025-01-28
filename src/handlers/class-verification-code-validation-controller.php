@@ -12,6 +12,7 @@
 
 namespace Nifty_SMS_Verification_System\Handlers;
 
+use Tmeister\Firebase\JWT\JWT;
 use Nifty_SMS_Verification_System\Core\Twilio_Client;
 use Nifty_SMS_Verification_System\Models\Pending_Verification;
 use Nifty_SMS_Verification_System\Models\User_Phone_Number;
@@ -76,6 +77,7 @@ class Verification_Code_Validation_Controller extends WP_REST_Controller {
 		$phone_number      = $request->get_param( 'phone_number' );
 		$request_id        = $request->get_param( 'request_id' );
 		$verification_code = $request->get_param( 'verification_code' );
+		$generate_auth      = $request->get_param( 'generate_auth' );
 
 		// should we opt for it?
 		$request = Pending_Verification::first(
@@ -114,28 +116,44 @@ class Verification_Code_Validation_Controller extends WP_REST_Controller {
 					)
 				);
 
-				if ( $record ) { // there exists an associated user.
+				if ( $record ) {
+					// there exists an associated user.
 					// delete all pending requests for this number.
 					$request->delete();
-
-					return rest_ensure_response(
-						array(
-							'verified'  => (bool) $request->is_verified,
-							'user_id'   => absint( $record->user_id ),
-							'device_id' => $device_id,
-						)
+					$response = array(
+						'verified'  => (bool) $request->is_verified,
+						'user_id'   => absint( $record->user_id ),
+						'device_id' => $device_id,
 					);
+
+					if ( $generate_auth && $request->is_verified ) {
+						$token = $this->generate_token( (int) $record->user_id );
+						if ( is_wp_error( $token ) ) {
+							return $token;
+						}
+						$response['auth'] = $token;
+					}
+
+					return rest_ensure_response( $response );
 				}
 			}
 		}
 
-		return rest_ensure_response(
-			array(
-				'verified'  => (bool) $request->is_verified,
-				'user_id'   => get_current_user_id(),
-				'device_id' => $device_id,
-			)
+		$response = array(
+			'verified'  => (bool) $request->is_verified,
+			'user_id'   => get_current_user_id(),
+			'device_id' => $device_id,
 		);
+
+		if ( $generate_auth && $request->is_verified ) {
+			$token = $this->generate_token( get_current_user_id() );
+			if ( is_wp_error( $token ) ) {
+				return $token;
+			}
+			$response['auth'] = $token;
+		}
+
+		return rest_ensure_response( $response );
 	}
 
 	/**
@@ -168,6 +186,13 @@ class Verification_Code_Validation_Controller extends WP_REST_Controller {
 				'required'          => true,
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
+				'validate_callback' => 'rest_validate_request_arg',
+			),
+			'generate_auth' => array(
+				'required'          => false,
+				'default'           => false,
+				'type'              => 'boolean',
+				'sanitize_callback' => 'rest_sanitize_boolean',
 				'validate_callback' => 'rest_validate_request_arg',
 			),
 		);
@@ -207,9 +232,158 @@ class Verification_Code_Validation_Controller extends WP_REST_Controller {
 					'context'     => array( 'view' ),
 					'readonly'    => true,
 				),
+				'auth' => array(
+					'description' => __( 'Auth token if desired.', 'nifty-sms-verification-system' ),
+					'type'        => 'object',
+					'context'     => array( 'view' ),
+					'readonly'    => true,
+					'properties' => array(
+						'token'             => array(
+							'description' => __( 'The JWT token.', 'nifty-sms-verification-system' ),
+							'type'        => 'string',
+							'context'     => array( 'view' ),
+							'readonly'    => true,
+						),
+						'user_email'        => array(
+							'description' => __( 'The user email.', 'nifty-sms-verification-system' ),
+							'type'        => 'string',
+							'context'     => array( 'view' ),
+							'readonly'    => true,
+						),
+						'user_nicename'     => array(
+							'description' => __( 'The user nicename.', 'nifty-sms-verification-system' ),
+							'type'        => 'string',
+							'context'     => array( 'view' ),
+							'readonly'    => true,
+						),
+						'user_display_name' => array(
+							'description' => __( 'The user display name.', 'nifty-sms-verification-system' ),
+							'type'        => 'string',
+							'context'     => array( 'view' ),
+							'readonly'    => true,
+						),
+					)
+				),
 			),
 		);
 
 		return $this->schema;
+	}
+
+	/**
+	 * This is a custom copy of `Jwt_Auth_Public::generate_token` to generate jwt token based on sms verification status.
+	 *
+	 * @see Jwt_Auth_Public::generate_token()
+	 * @param $user_id
+	 *
+	 * @return mixed|string|WP_Error|null
+	 */
+	private function generate_token( $user_id ) {
+
+		if ( ! $user_id || ! class_exists( JWT::class ) ) {
+			return null;
+		}
+
+		$secret_key = defined( 'JWT_AUTH_SECRET_KEY' ) ? JWT_AUTH_SECRET_KEY : false;
+
+
+		if ( ! $secret_key ) {
+			return null;
+			/*return new WP_Error(
+				'jwt_auth_bad_config',
+				__( 'JWT is not configured properly, please contact the admin', 'nifty-sms-verification-system' ),
+				array(
+					'status' => 403,
+				)
+			);*/
+		}
+
+		// verify that user exists.
+		$user = get_user_by( 'id', $user_id );
+
+		if ( ! $user ) {
+			return null;
+		}
+
+		/** Generate */
+		$issuedAt  = time();
+		$notBefore = apply_filters( 'jwt_auth_not_before', $issuedAt, $issuedAt );
+		$expire    = apply_filters( 'jwt_auth_expire', $issuedAt + ( DAY_IN_SECONDS * 7 ), $issuedAt );
+
+		$token = array(
+			'iss'  => get_bloginfo( 'url' ),
+			'iat'  => $issuedAt,
+			'nbf'  => $notBefore,
+			'exp'  => $expire,
+			'data' => array(
+				'user' => array(
+					'id' => $user->data->ID,
+				),
+			),
+		);
+
+		/** Let the user modify the token data before the sign. */
+		$algorithm = $this->get_algorithm();
+
+		if ( $algorithm === false ) {
+			return new WP_Error(
+				'jwt_auth_unsupported_algorithm',
+				__( 'Algorithm not supported, see https://www.rfc-editor.org/rfc/rfc7518#section-3',
+					'wp-api-jwt-auth' ),
+				array(
+					'status' => 403,
+				)
+			);
+		}
+
+		$token = JWT::encode(
+			apply_filters( 'jwt_auth_token_before_sign', $token, $user ),
+			$secret_key,
+			$algorithm
+		);
+
+		/** The token is signed, now create the object with no sensible user data to the client*/
+		$data = array(
+			'token'             => $token,
+			'user_email'        => $user->data->user_email,
+			'user_nicename'     => $user->data->user_nicename,
+			'user_display_name' => $user->data->display_name,
+		);
+
+		/** Let the user modify the data before send it back */
+		return apply_filters( 'jwt_auth_token_before_dispatch', $data, $user );
+	}
+
+	/**
+	 * Copy of the method `Jwt_Auth_Public::get_algorithm`.
+	 *
+	 * @see Jwt_Auth_Public::get_algorithm() for more details.
+	 *
+	 * Get the algorithm used to sign the token via the filter jwt_auth_algorithm.
+	 * and validate that the algorithm is in the supported list.
+	 *
+	 * @return false|mixed|null
+	 */
+	private function get_algorithm() {
+		$algorithm = apply_filters( 'jwt_auth_algorithm', 'HS256' );
+
+		if ( ! in_array( $algorithm, array(
+			'HS256',
+			'HS384',
+			'HS512',
+			'RS256',
+			'RS384',
+			'RS512',
+			'ES256',
+			'ES384',
+			'ES512',
+			'PS256',
+			'PS384',
+			'PS512'
+		) ) ) {
+			return false;
+		}
+
+		return $algorithm;
 	}
 }
