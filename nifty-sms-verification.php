@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:  Nifty SMS Verification System
- * Version:      1.1.1
+ * Version:      1.1.2
  * Description:  It allows verification of user mobile numbers using twilio api.
  * Author:       BuddyDev
  * Author URI:   https://buddydev.com/
@@ -37,7 +37,7 @@ class Nifty_SMS_Verification_System {
 	 *
 	 * @var string
 	 */
-	private string $version = '1.1.1';
+	private string $version = '1.1.2';
 
 	/**
 	 * Singleton instance

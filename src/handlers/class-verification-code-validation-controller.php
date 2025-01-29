@@ -284,6 +284,10 @@ class Verification_Code_Validation_Controller extends WP_REST_Controller {
 			return null;
 		}
 
+		if ( function_exists( 'bpmts_is_user_suspended' ) && bpmts_is_user_suspended( $user_id ) ) {
+			return null;
+		}
+
 		$secret_key = defined( 'JWT_AUTH_SECRET_KEY' ) ? JWT_AUTH_SECRET_KEY : false;
 
 
